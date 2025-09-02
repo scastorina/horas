@@ -208,23 +208,49 @@ def charts(df: pd.DataFrame, date_col: str | None, person_col: str | None):
         st.bar_chart(top_people)
 
 
-def filter_block(df: pd.DataFrame, date_col_suggested: list[str], person_col_suggested: list[str]):
+def filter_block(
+    df: pd.DataFrame,
+    date_col_suggested: list[str],
+    person_col_suggested: list[str],
+    key_prefix: str,
+):
     st.markdown("###  Filtros")
     c1, c2, c3 = st.columns([1, 1, 2])
-    date_col = c1.selectbox("Columna de fecha", options=["(ninguna)"] + date_col_suggested, index=1 if date_col_suggested else 0)
+    date_col = c1.selectbox(
+        "Columna de fecha",
+        options=["(ninguna)"] + date_col_suggested,
+        index=1 if date_col_suggested else 0,
+        key=f"{key_prefix}_date_col",
+    )
     date_col = None if date_col == "(ninguna)" else date_col
-    person_col = c2.selectbox("Columna de capataz / usuario", options=["(ninguna)"] + person_col_suggested, index=1 if person_col_suggested else 0)
+    person_col = c2.selectbox(
+        "Columna de capataz / usuario",
+        options=["(ninguna)"] + person_col_suggested,
+        index=1 if person_col_suggested else 0,
+        key=f"{key_prefix}_person_col",
+    )
     person_col = None if person_col == "(ninguna)" else person_col
     if date_col and date_col in df.columns and str(df[date_col].dtype).startswith("datetime"):
         min_date = pd.to_datetime(df[date_col]).min().date()
         max_date = pd.to_datetime(df[date_col]).max().date()
-        start, end = c3.date_input("Rango de fechas", (min_date, max_date))
+        start, end = c3.date_input(
+            "Rango de fechas",
+            (min_date, max_date),
+            key=f"{key_prefix}_date_range",
+        )
         if start and end:
-            mask = (pd.to_datetime(df[date_col]).dt.date >= start) & (pd.to_datetime(df[date_col]).dt.date <= end)
+            mask = (pd.to_datetime(df[date_col]).dt.date >= start) & (
+                pd.to_datetime(df[date_col]).dt.date <= end
+            )
             df = df.loc[mask].copy()
     if person_col and person_col in df.columns:
         people = ["(todas)"] + sorted(df[person_col].dropna().astype(str).unique().tolist())
-        who = st.multiselect("Capataz / Usuario", people, default=["(todas)"])
+        who = st.multiselect(
+            "Capataz / Usuario",
+            people,
+            default=["(todas)"],
+            key=f"{key_prefix}_who",
+        )
         if who and "(todas)" not in who:
             df = df[df[person_col].astype(str).isin(who)].copy()
     return df, date_col, person_col
@@ -261,7 +287,9 @@ def view_tab_for_endpoint(name: str, url: str, bearer: str, top_preview: int | N
         return
     date_guess = guess_date_columns(df)
     people_guess = guess_people_columns(df)
-    df_filtered, date_col, person_col = filter_block(df, date_guess, people_guess)
+    df_filtered, date_col, person_col = filter_block(
+        df, date_guess, people_guess, name
+    )
     c1, c2, c3 = st.columns([2, 1, 1])
     with c1:
         section_header("Resumen")
