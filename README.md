@@ -26,3 +26,8 @@ streamlit run app.py
 - La app sigue `@odata.nextLink` si hay paginación.
 - Detecta columnas de fecha y de capataz/usuario por heurística (podés elegirlas desde la UI).
 - Exporta CSV del filtro actual.
+
+## Control de horas
+- El dataset de horas debe contener las columnas `empleado`, `fecha` y `horas`.
+- El período se calcula a partir del mes elegido con `periodo_inicio = selected_month.replace(day=16) - pd.offsets.MonthBegin(1)`.
+- La tabla se actualiza automáticamente al cambiar el mes de referencia.

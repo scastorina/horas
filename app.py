@@ -278,6 +278,19 @@ def download_button(df: pd.DataFrame, label: str = "Descargar CSV", filename: st
     st.download_button(label=label, data=csv, file_name=filename, mime="text/csv")
 
 
+def render_hours_table(df: pd.DataFrame, periodo_inicio: pd.Timestamp):
+    """Renderiza una tabla de horas filtrada por periodo_inicio."""
+    periodo_fin = periodo_inicio + pd.offsets.MonthBegin(1)
+    mask = (
+        pd.to_datetime(df["fecha"]) >= periodo_inicio
+    ) & (pd.to_datetime(df["fecha"]) < periodo_fin)
+    st.dataframe(
+        df.loc[mask],
+        use_container_width=True,
+        hide_index=True,
+    )
+
+
 def view_tab_for_endpoint(name: str, url: str, bearer: str, top_preview: int | None):
     st.markdown(f"## {name}")
     with st.spinner(f"Cargando {name}..."):
@@ -324,6 +337,21 @@ with st.sidebar.expander("Avanzado"):
 # Title and caption
 st.title(" Panel de Cargas RDT — Capataces")
 st.caption("Visualizá, filtrá y descargá registros de tus formularios ODK (vía OData).")
+
+# Control de horas
+st.header("Control de horas")
+hours_file = st.file_uploader("Dataset de horas (CSV)", type="csv")
+if hours_file is not None:
+    df_hours = pd.read_csv(hours_file, parse_dates=["fecha"])
+    if {"empleado", "fecha", "horas"}.issubset(df_hours.columns):
+        selected_month = st.date_input(
+            "Mes de referencia",
+            pd.Timestamp.today().replace(day=1),
+        )
+        periodo_inicio = selected_month.replace(day=16) - pd.offsets.MonthBegin(1)
+        render_hours_table(df_hours, periodo_inicio)
+    else:
+        st.error("El dataset debe tener columnas empleado, fecha y horas.")
 
 # Main tabs
 tabs = st.tabs(list(default_urls.keys()))
