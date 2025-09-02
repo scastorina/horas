@@ -175,6 +175,54 @@ def guess_date_columns(df: pd.DataFrame) -> list[str]:
     return out or candidates
 
 
+def render_hours_table(
+    df: pd.DataFrame, empleado_col: str, fecha_col: str, periodo_inicio: pd.Timestamp
+) -> pd.DataFrame:
+    """Generate a pivoted hours table for the given period.
+
+    The period spans from ``periodo_inicio`` (inclusive) to the 15th of the
+    following month. The resulting DataFrame has one row per employee and one
+    column per day in the period with missing values filled as ``0`` and
+    columns ordered chronologically.
+    """
+
+    if (
+        empleado_col not in df.columns
+        or fecha_col not in df.columns
+        or "horas" not in df.columns
+    ):
+        return pd.DataFrame()
+
+    start = pd.to_datetime(periodo_inicio)
+    end = (start + pd.DateOffset(months=1)) - pd.Timedelta(days=1)
+
+    mask = (pd.to_datetime(df[fecha_col]) >= start) & (
+        pd.to_datetime(df[fecha_col]) <= end
+    )
+    df_period = df.loc[mask].copy()
+
+    if df_period.empty:
+        rango = pd.date_range(start, end, freq="D")
+        empty = pd.DataFrame(index=df[empleado_col].dropna().unique())
+        empty = empty.assign(**{d.date(): 0 for d in rango})
+        return empty
+
+    df_period[fecha_col] = pd.to_datetime(df_period[fecha_col]).dt.date
+
+    tabla = df_period.pivot_table(
+        index=empleado_col,
+        columns=fecha_col,
+        values="horas",
+        aggfunc="sum",
+        fill_value=0,
+    )
+
+    rango = pd.date_range(start, end, freq="D").date
+    tabla = tabla.reindex(columns=rango, fill_value=0)
+    tabla = tabla.sort_index(axis=1)
+    return tabla
+
+
 def kpi_card(label: str, value, help_text: str | None = None):
     st.metric(label, value, help=help_text)
 
@@ -332,4 +380,24 @@ for tab, (name, url) in zip(tabs, default_urls.items()):
         if not url:
             st.info("Ingresá la URL OData en la barra lateral para comenzar.")
         else:
-            view_tab_for_endpoint(name, url, TOKEN, top_preview)
+            if name == "RDT Frutales":
+                sub_tabs = st.tabs(["Datos", "Control de horas"])
+                with sub_tabs[0]:
+                    view_tab_for_endpoint(name, url, TOKEN, top_preview)
+                with sub_tabs[1]:
+                    with st.spinner("Cargando datos..."):
+                        df_hours = fetch_odata(url, TOKEN, top_preview)
+                    if df_hours.empty:
+                        st.info("No se obtuvieron datos.")
+                    else:
+                        empleado_opts = guess_people_columns(df_hours) or df_hours.columns.tolist()
+                        fecha_opts = guess_date_columns(df_hours) or df_hours.columns.tolist()
+                        empleado_col = st.selectbox("Columna empleado", empleado_opts)
+                        fecha_col = st.selectbox("Columna fecha", fecha_opts)
+                        mes = st.date_input("Mes", value=pd.Timestamp.today())
+                        periodo_inicio = pd.to_datetime(mes).replace(day=16)
+                        horas_tabla = render_hours_table(df_hours, empleado_col, fecha_col, periodo_inicio)
+                        st.dataframe(horas_tabla, use_container_width=True)
+                        download_button(horas_tabla.reset_index(), filename="control_horas.csv")
+            else:
+                view_tab_for_endpoint(name, url, TOKEN, top_preview)
