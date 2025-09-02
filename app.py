@@ -325,18 +325,46 @@ def download_button(df: pd.DataFrame, label: str = "Descargar CSV", filename: st
     csv = df.to_csv(index=False).encode("utf-8")
     st.download_button(label=label, data=csv, file_name=filename, mime="text/csv")
 
+def view_hours(
+    df: pd.DataFrame,
+    empleado_col: str = "empleado",
+    fecha_col: str = "fecha",
+    horas_col: str = "horas",
+):
+    """Muestra una tabla de control de horas y permite descargarla.
 
-def render_hours_table(df: pd.DataFrame, periodo_inicio: pd.Timestamp):
-    """Renderiza una tabla de horas filtrada por periodo_inicio."""
-    periodo_fin = periodo_inicio + pd.offsets.MonthBegin(1)
-    mask = (
-        pd.to_datetime(df["fecha"]) >= periodo_inicio
-    ) & (pd.to_datetime(df["fecha"]) < periodo_fin)
-    st.dataframe(
-        df.loc[mask],
-        use_container_width=True,
-        hide_index=True,
+    Si faltan las columnas requeridas ``empleado``, ``fecha`` u ``horas``,
+    se informa mediante ``st.warning``.
+    """
+
+    missing = [
+        col for col in (empleado_col, fecha_col, horas_col) if col not in df.columns
+    ]
+    if missing:
+        st.warning("Faltan columnas requeridas: " + ", ".join(missing))
+        return
+
+    df_local = df.rename(
+        columns={
+            empleado_col: "empleado",
+            fecha_col: "fecha",
+            horas_col: "horas",
+        }
+    ).copy()
+    df_local["fecha"] = pd.to_datetime(df_local["fecha"], errors="coerce")
+
+    selected_month = st.date_input(
+        "Mes de referencia", pd.Timestamp.today().replace(day=1)
     )
+    periodo_inicio = selected_month.replace(day=16) - pd.offsets.MonthBegin(1)
+
+    horas_tabla = render_hours_table(df_local, "empleado", "fecha", periodo_inicio)
+    if horas_tabla.empty:
+        st.warning("No hay datos para el período seleccionado")
+        return
+
+    st.dataframe(horas_tabla, use_container_width=True)
+    download_button(horas_tabla.reset_index(), filename="horas_export.csv")
 
 
 def view_tab_for_endpoint(name: str, url: str, bearer: str, top_preview: int | None):
@@ -390,16 +418,8 @@ st.caption("Visualizá, filtrá y descargá registros de tus formularios ODK (v�
 st.header("Control de horas")
 hours_file = st.file_uploader("Dataset de horas (CSV)", type="csv")
 if hours_file is not None:
-    df_hours = pd.read_csv(hours_file, parse_dates=["fecha"])
-    if {"empleado", "fecha", "horas"}.issubset(df_hours.columns):
-        selected_month = st.date_input(
-            "Mes de referencia",
-            pd.Timestamp.today().replace(day=1),
-        )
-        periodo_inicio = selected_month.replace(day=16) - pd.offsets.MonthBegin(1)
-        render_hours_table(df_hours, periodo_inicio)
-    else:
-        st.error("El dataset debe tener columnas empleado, fecha y horas.")
+    df_hours = pd.read_csv(hours_file)
+    view_hours(df_hours)
 
 # Main tabs
 tabs = st.tabs(list(default_urls.keys()))
@@ -420,12 +440,14 @@ for tab, (name, url) in zip(tabs, default_urls.items()):
                     else:
                         empleado_opts = guess_people_columns(df_hours) or df_hours.columns.tolist()
                         fecha_opts = guess_date_columns(df_hours) or df_hours.columns.tolist()
+                        horas_opts = df_hours.columns.tolist()
                         empleado_col = st.selectbox("Columna empleado", empleado_opts)
                         fecha_col = st.selectbox("Columna fecha", fecha_opts)
-                        mes = st.date_input("Mes", value=pd.Timestamp.today())
-                        periodo_inicio = pd.to_datetime(mes).replace(day=16)
-                        horas_tabla = render_hours_table(df_hours, empleado_col, fecha_col, periodo_inicio)
-                        st.dataframe(horas_tabla, use_container_width=True)
-                        download_button(horas_tabla.reset_index(), filename="control_horas.csv")
+                        horas_col = st.selectbox(
+                            "Columna horas",
+                            horas_opts,
+                            index=horas_opts.index("horas") if "horas" in horas_opts else 0,
+                        )
+                        view_hours(df_hours, empleado_col, fecha_col, horas_col)
             else:
                 view_tab_for_endpoint(name, url, TOKEN, top_preview)
