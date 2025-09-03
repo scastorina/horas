@@ -393,8 +393,12 @@ def view_tab_for_endpoint(name: str, url: str, bearer: str, top_preview: int | N
     section_header("Tabla", "")
     column_config = {}
     if "fecha" in df_filtered.columns:
-        df_filtered["fecha"] = pd.to_datetime(df_filtered["fecha"], errors="coerce").dt.date
-        column_config["fecha"] = st.column_config.DateColumn(disabled=True)
+        # Ensure the column is parsed as datetime so Streamlit can render it properly
+        # `DateColumn` requires the underlying dtype to be datetime-like, not string.
+        df_filtered["fecha"] = pd.to_datetime(df_filtered["fecha"], errors="coerce")
+        column_config["fecha"] = st.column_config.DatetimeColumn(
+            disabled=True, format="YYYY-MM-DD"
+        )
     st.data_editor(
         df_filtered,
         use_container_width=True,
