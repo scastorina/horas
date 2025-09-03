@@ -94,11 +94,12 @@ if not st.session_state["token"]:
         token = login_and_get_token(email_input, pwd_input)
         if token:
             st.session_state["token"] = token
-            st.success("Login exitoso: token obtenido.")
+            st.rerun()
         else:
             st.error("Credenciales incorrectas o sin permisos. Reintentá.")
-    # halt the script until token is obtained
-    st.stop()
+            st.stop()
+    else:
+        st.stop()
 
 # Use the session token for all API calls
 TOKEN = st.session_state["token"].strip()
