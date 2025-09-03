@@ -391,7 +391,16 @@ def view_tab_for_endpoint(name: str, url: str, bearer: str, top_preview: int | N
     section_header("Gráficos", "")
     charts(df_filtered, date_col, person_col)
     section_header("Tabla", "")
-    st.dataframe(df_filtered, use_container_width=True, hide_index=True)
+    column_config = {}
+    if "fecha" in df_filtered.columns:
+        df_filtered["fecha"] = pd.to_datetime(df_filtered["fecha"], errors="coerce").dt.date
+        column_config["fecha"] = st.column_config.DateColumn(disabled=True)
+    st.data_editor(
+        df_filtered,
+        use_container_width=True,
+        hide_index=True,
+        column_config=column_config,
+    )
 
 
 # ---------------------------
@@ -419,7 +428,9 @@ st.caption("Visualizá, filtrá y descargá registros de tus formularios ODK (v�
 st.header("Control de horas")
 hours_file = st.file_uploader("Dataset de horas (CSV)", type="csv")
 if hours_file is not None:
-    df_hours = pd.read_csv(hours_file)
+    df_hours = pd.read_csv(hours_file, parse_dates=["fecha"])
+    if "fecha" in df_hours.columns:
+        df_hours["fecha"] = df_hours["fecha"].dt.date
     view_hours(df_hours)
 
 # Main tabs
